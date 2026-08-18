@@ -13,7 +13,7 @@ pytesseract.pytesseract.tesseract_cmd = (
 
 def clean_ocr_text(text: str) -> str:
     """
-    Clean OCR output.
+    Clean and normalize OCR output.
     """
 
     if not text:
@@ -23,6 +23,9 @@ def clean_ocr_text(text: str) -> str:
 
     # Remove excessive spaces
     text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove spaces around newlines
+    text = re.sub(r" *\n *", "\n", text)
 
     # Remove excessive blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -38,30 +41,16 @@ def clean_ocr_text(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-def extract_text_from_image(image: Image.Image) -> str:
+def _resize_image(img: np.ndarray) -> np.ndarray:
     """
-    Extract text from images using color-aware preprocessing.
-
-    This works better for images containing:
-    - white text on dark backgrounds
-    - red text
-    - textured backgrounds
-    - posters/memes
+    Resize image to a reasonable OCR resolution.
     """
 
-    # PIL -> OpenCV
-    image = image.convert("RGB")
-    img = np.array(image)
-
-    # OpenCV uses RGB here because numpy image is RGB
     height, width = img.shape[:2]
 
-    # ---------------------------------------------------------
-    # 1. Resize
-    # ---------------------------------------------------------
-
     if width < 1600:
-        scale = 2
+
+        scale = 2.0
 
         img = cv2.resize(
             img,
@@ -72,6 +61,7 @@ def extract_text_from_image(image: Image.Image) -> str:
         )
 
     elif width > 3000:
+
         scale = 3000 / width
 
         img = cv2.resize(
@@ -83,39 +73,112 @@ def extract_text_from_image(image: Image.Image) -> str:
             interpolation=cv2.INTER_AREA,
         )
 
+    return img
+
+
+def _build_preprocessing_variants(img: np.ndarray):
+    """
+    Create multiple image variants so OCR is not dependent
+    on one particular text color or background.
+    """
+
+    variants = []
+
     # ---------------------------------------------------------
-    # 2. Convert to HSV
+    # 1. Grayscale
+    # ---------------------------------------------------------
+
+    gray = cv2.cvtColor(
+        img,
+        cv2.COLOR_RGB2GRAY,
+    )
+
+    variants.append(
+        ("grayscale", gray)
+    )
+
+    # ---------------------------------------------------------
+    # 2. Contrast enhancement using CLAHE
+    # ---------------------------------------------------------
+
+    clahe = cv2.createCLAHE(
+        clipLimit=2.0,
+        tileGridSize=(8, 8),
+    )
+
+    enhanced = clahe.apply(gray)
+
+    variants.append(
+        ("clahe", enhanced)
+    )
+
+    # ---------------------------------------------------------
+    # 3. Otsu threshold
+    # ---------------------------------------------------------
+
+    _, otsu = cv2.threshold(
+        enhanced,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )
+
+    variants.append(
+        ("otsu", otsu)
+    )
+
+    # ---------------------------------------------------------
+    # 4. Adaptive threshold
+    # ---------------------------------------------------------
+
+    adaptive = cv2.adaptiveThreshold(
+        enhanced,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        11,
+    )
+
+    variants.append(
+        ("adaptive", adaptive)
+    )
+
+    # ---------------------------------------------------------
+    # 5. Inverted adaptive threshold
+    # Useful for white text on dark backgrounds
+    # ---------------------------------------------------------
+
+    adaptive_inv = cv2.bitwise_not(adaptive)
+
+    variants.append(
+        ("adaptive_inverse", adaptive_inv)
+    )
+
+    # ---------------------------------------------------------
+    # 6. Color-aware mask
+    # Supports white and red text from the original pipeline
     # ---------------------------------------------------------
 
     hsv = cv2.cvtColor(
         img,
-        cv2.COLOR_RGB2HSV
+        cv2.COLOR_RGB2HSV,
     )
 
-    r = img[:, :, 0]
-    g = img[:, :, 1]
-    b = img[:, :, 2]
+    r = img[:, :, 0].astype(np.int16)
+    g = img[:, :, 1].astype(np.int16)
+    b = img[:, :, 2].astype(np.int16)
 
     saturation = hsv[:, :, 1]
     value = hsv[:, :, 2]
 
-    # ---------------------------------------------------------
-    # 3. Detect WHITE text
-    # ---------------------------------------------------------
-
+    # White text
     white_mask = (
         (value > 150) &
         (saturation < 90)
     )
 
-    white_mask = (
-        white_mask.astype(np.uint8) * 255
-    )
-
-    # ---------------------------------------------------------
-    # 4. Detect RED text
-    # ---------------------------------------------------------
-
+    # Red text
     red_mask = (
         (r > 100) &
         (r > g * 1.4) &
@@ -124,49 +187,109 @@ def extract_text_from_image(image: Image.Image) -> str:
         (value > 70)
     )
 
-    red_mask = (
-        red_mask.astype(np.uint8) * 255
+    color_mask = (
+        white_mask | red_mask
+    ).astype(np.uint8) * 255
+
+    variants.append(
+        ("color_mask", color_mask)
     )
+
+    return variants
+
+
+def _run_ocr(image: np.ndarray, config: str):
+    """
+    Run Tesseract and return text + confidence.
+    """
+
+    try:
+
+        data = pytesseract.image_to_data(
+            image,
+            config=config,
+            lang="eng",
+            output_type=pytesseract.Output.DICT,
+        )
+
+        words = []
+        confidences = []
+
+        for text, confidence in zip(
+            data["text"],
+            data["conf"],
+        ):
+
+            text = text.strip()
+
+            try:
+                confidence = float(confidence)
+            except (ValueError, TypeError):
+                confidence = -1
+
+            if text and confidence >= 0:
+                words.append(text)
+                confidences.append(confidence)
+
+        if not words:
+            return "", 0.0
+
+        text = " ".join(words)
+
+        average_confidence = (
+            sum(confidences) / len(confidences)
+        )
+
+        return (
+            clean_ocr_text(text),
+            average_confidence,
+        )
+
+    except Exception as e:
+
+        print("OCR error:", e)
+
+        return "", 0.0
+
+
+def extract_text_from_image(image: Image.Image) -> str:
+    """
+    Extract text from an image using multiple preprocessing
+    strategies and Tesseract OCR.
+
+    Supports:
+    - documents
+    - screenshots
+    - posters
+    - memes
+    - white text on dark backgrounds
+    - colored text
+    - uneven lighting
+    - noisy backgrounds
+    """
 
     # ---------------------------------------------------------
-    # 5. Combine text masks
+    # 1. PIL -> RGB NumPy
     # ---------------------------------------------------------
 
-    text_mask = cv2.bitwise_or(
-        white_mask,
-        red_mask
-    )
+    image = image.convert("RGB")
+
+    img = np.array(image)
 
     # ---------------------------------------------------------
-    # 6. Remove small background noise
+    # 2. Resize
     # ---------------------------------------------------------
 
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
-        (5, 5)
-    )
-
-    text_mask = cv2.morphologyEx(
-        text_mask,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=2
-    )
-
-    small_kernel = np.ones(
-        (3, 3),
-        np.uint8
-    )
-
-    text_mask = cv2.morphologyEx(
-        text_mask,
-        cv2.MORPH_OPEN,
-        small_kernel,
-        iterations=1
-    )
+    img = _resize_image(img)
 
     # ---------------------------------------------------------
-    # 7. OCR
+    # 3. Generate preprocessing variants
+    # ---------------------------------------------------------
+
+    variants = _build_preprocessing_variants(img)
+
+    # ---------------------------------------------------------
+    # 4. OCR configurations
     # ---------------------------------------------------------
 
     configs = [
@@ -175,33 +298,69 @@ def extract_text_from_image(image: Image.Image) -> str:
         "--oem 3 --psm 12",
     ]
 
-    results = []
+    candidates = []
 
-    for config in configs:
+    # ---------------------------------------------------------
+    # 5. Run OCR
+    # ---------------------------------------------------------
 
-        try:
+    for variant_name, processed_image in variants:
 
-            text = pytesseract.image_to_string(
-                text_mask,
-                config=config,
-                lang="eng",
+        for config in configs:
+
+            text, confidence = _run_ocr(
+                processed_image,
+                config,
             )
 
-            text = clean_ocr_text(text)
+            if not text:
+                continue
 
-            if text:
-                results.append(text)
+            # -------------------------------------------------
+            # Score candidate
+            #
+            # Confidence is more important than length.
+            # Small bonus for useful text length.
+            # -------------------------------------------------
 
-        except Exception as e:
-            print("OCR error:", e)
+            word_count = len(text.split())
 
-    if not results:
+            score = (
+                confidence * 0.85
+                + min(word_count, 50) * 0.3
+            )
+
+            candidates.append(
+                {
+                    "text": text,
+                    "confidence": confidence,
+                    "score": score,
+                    "variant": variant_name,
+                    "config": config,
+                }
+            )
+
+    # ---------------------------------------------------------
+    # 6. No OCR result
+    # ---------------------------------------------------------
+
+    if not candidates:
         return ""
 
-    # Prefer the most readable result
-    best_text = max(
-        results,
-        key=lambda x: len(x)
+    # ---------------------------------------------------------
+    # 7. Select highest quality candidate
+    # ---------------------------------------------------------
+
+    best = max(
+        candidates,
+        key=lambda item: item["score"],
     )
 
-    return best_text.strip()
+    print(
+        f"OCR selected: "
+        f"variant={best['variant']}, "
+        f"confidence={best['confidence']:.2f}, "
+        f"score={best['score']:.2f}"
+    )
+
+    return best["text"].strip()
