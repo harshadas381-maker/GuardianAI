@@ -29,3 +29,15 @@ Thumbs.db
 *.sqlite3
 # Test files
 ocr_test.png
+
+# Local datasets and generated evaluation outputs
+/datasets/
+/backend/reports/
+/backend/ml/*.csv
+/backend/ml/*.json
+
+# Local backups and test artifacts
+/backend/app/services/toxicity_model.py.bak
+/backend/test_v4_clean.py
+/test_toxic.png
+/frontend/src/pages/Reports/GuardianAI.code-workspace

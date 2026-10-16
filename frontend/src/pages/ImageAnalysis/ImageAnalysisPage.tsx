@@ -1,17 +1,19 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DashboardLayout from "../../components/dashboard/DashboardLayout";
 import api from "../../api/api";
 import { notifyDashboardRefresh } from "../../api/dashboardEvents";
 
 interface ImageAnalysisResult {
+  id?: number;
   filename: string;
   extracted_text: string;
   prediction: string;
   confidence: number;
+  source?: string;
   message?: string;
 }
 
-export default function ImageAnalysisPage() {
+function ImageAnalysisPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,9 +23,22 @@ export default function ImageAnalysisPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // =========================
-  // File Selection
-  // =========================
+  // ============================================================
+  // CLEANUP IMAGE PREVIEW URL
+  // ============================================================
+
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
+  // ============================================================
+  // FILE SELECTION
+  // ============================================================
+
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -33,6 +48,7 @@ export default function ImageAnalysisPage() {
       return;
     }
 
+    // Supported image types
     const allowedTypes = [
       "image/jpeg",
       "image/png",
@@ -41,9 +57,7 @@ export default function ImageAnalysisPage() {
 
     if (!allowedTypes.includes(selectedFile.type)) {
       setFile(null);
-      setPreview("");
       setResult(null);
-
       setError(
         "Only JPG, JPEG, PNG, and WEBP images are supported."
       );
@@ -55,14 +69,12 @@ export default function ImageAnalysisPage() {
       return;
     }
 
-    // Optional file size limit: 10 MB
+    // Maximum 10 MB
     const maxSize = 10 * 1024 * 1024;
 
     if (selectedFile.size > maxSize) {
       setFile(null);
-      setPreview("");
       setResult(null);
-
       setError("Image size must be less than 10 MB.");
 
       if (fileInputRef.current) {
@@ -72,17 +84,19 @@ export default function ImageAnalysisPage() {
       return;
     }
 
+    // Create preview
+    const imageUrl = URL.createObjectURL(selectedFile);
+
     setFile(selectedFile);
+    setPreview(imageUrl);
     setResult(null);
     setError("");
-
-    const imageUrl = URL.createObjectURL(selectedFile);
-    setPreview(imageUrl);
   };
 
-  // =========================
-  // Analyze Image
-  // =========================
+  // ============================================================
+  // IMAGE ANALYSIS
+  // ============================================================
+
   const handleAnalyze = async () => {
     if (!file) {
       setError("Please select an image first.");
@@ -96,46 +110,62 @@ export default function ImageAnalysisPage() {
     try {
       const formData = new FormData();
 
+      // IMPORTANT:
+      // Backend expects multipart/form-data field named "file"
       formData.append("file", file);
+
+      console.log("Uploading image:", file.name);
+      console.log("Image size:", file.size);
+      console.log("Image type:", file.type);
 
       const response = await api.post<ImageAnalysisResult>(
         "/image-analysis/analyze",
         formData
       );
 
-      console.log("Image analysis response:", response.data);
+      console.log(
+        "Image analysis response:",
+        response.data
+      );
 
       setResult(response.data);
-      notifyDashboardRefresh();
-      
+
+      // Refresh dashboard statistics
+      setTimeout(() => {
+        notifyDashboardRefresh();
+      }, 0);
     } catch (err: any) {
       console.error("Image analysis error:", err);
 
-      if (err.response) {
-        console.error(
-          "Status:",
-          err.response.status
-        );
+      const backendError =
+        err?.response?.data?.detail;
 
-        console.error(
-          "Response:",
-          err.response.data
+      if (Array.isArray(backendError)) {
+        setError(
+          backendError
+            .map((item: any) => item?.msg || "Validation error")
+            .join(", ")
+        );
+      } else {
+        setError(
+          backendError ||
+            "Unable to analyze image. Please make sure the backend server is running."
         );
       }
-
-      setError(
-        err.response?.data?.detail ||
-          "Unable to analyze image. Please make sure the backend server is running."
-      );
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================
-  // Clear
-  // =========================
+  // ============================================================
+  // CLEAR
+  // ============================================================
+
   const handleClear = () => {
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+
     setFile(null);
     setPreview("");
     setResult(null);
@@ -146,33 +176,138 @@ export default function ImageAnalysisPage() {
     }
   };
 
-  // =========================
-  // Prediction
-  // =========================
-  const isToxic =
-    result !== null &&
-    result.prediction.toLowerCase() === "toxic";
+  // ============================================================
+  // RESULT HELPERS
+  // ============================================================
+
+  const prediction =
+    result?.prediction?.toLowerCase() || "";
+
+  const getPredictionMessage = () => {
+    switch (prediction) {
+      case "safe":
+        return "No harmful content detected.";
+
+      case "cyberbullying":
+        return "Cyberbullying-related content detected.";
+
+      case "offensive":
+        return "Offensive or insulting content detected.";
+
+      case "toxic":
+        return "Potentially harmful or toxic content detected.";
+
+      case "hate":
+        return "Potential hate-related content detected.";
+
+      case "no text":
+        return (
+          result?.message ||
+          "No readable text was detected in the image."
+        );
+
+      default:
+        return "Analysis result available.";
+    }
+  };
+
+  const getPredictionColor = () => {
+    switch (prediction) {
+      case "safe":
+        return "text-green-400";
+
+      case "cyberbullying":
+        return "text-orange-400";
+
+      case "offensive":
+        return "text-yellow-400";
+
+      case "toxic":
+        return "text-red-400";
+
+      case "hate":
+        return "text-purple-400";
+
+      default:
+        return "text-slate-300";
+    }
+  };
+
+  const getProgressColor = () => {
+    switch (prediction) {
+      case "safe":
+        return "bg-green-500";
+
+      case "cyberbullying":
+        return "bg-orange-500";
+
+      case "offensive":
+        return "bg-yellow-500";
+
+      case "toxic":
+        return "bg-red-500";
+
+      case "hate":
+        return "bg-purple-500";
+
+      default:
+        return "bg-cyan-500";
+    }
+  };
+
+  const getStatusStyle = () => {
+    switch (prediction) {
+      case "safe":
+        return "border-green-500/30 bg-green-500/10 text-green-400";
+
+      case "cyberbullying":
+        return "border-orange-500/30 bg-orange-500/10 text-orange-400";
+
+      case "offensive":
+        return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
+
+      case "toxic":
+        return "border-red-500/30 bg-red-500/10 text-red-400";
+
+      case "hate":
+        return "border-purple-500/30 bg-purple-500/10 text-purple-400";
+
+      default:
+        return "border-slate-700 bg-slate-800 text-slate-300";
+    }
+  };
+
+  const confidence = Math.min(
+    Math.max(Number(result?.confidence) || 0, 0),
+    100
+  );
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <DashboardLayout>
-      {/* =========================
-          Page Header
-      ========================= */}
+      {/* ========================================================
+          PAGE HEADER
+      ======================================================== */}
+
       <div>
         <h1 className="text-4xl font-bold text-white">
           Image Analysis
         </h1>
 
         <p className="mt-4 text-slate-400">
-          Upload an image and GuardianAI will extract
-          text using OCR and analyze it for toxic,
-          harmful, or cyberbullying content.
+          Upload an image and GuardianAI will extract text
+          using OCR and analyze it for toxic, harmful,
+          offensive, hate, or cyberbullying content.
         </p>
       </div>
 
-      {/* =========================
-          Upload Section
-      ========================= */}
+      {/* ========================================================
+          UPLOAD SECTION
+      ======================================================== */}
+
       <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
         <label className="mb-3 block text-lg font-semibold text-white">
           Select Image
@@ -181,17 +316,19 @@ export default function ImageAnalysisPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".jpg,.jpeg,.png,.webp"
+          accept="image/jpeg,image/png,image/webp"
           onChange={handleFileChange}
-          className="block w-full cursor-pointer rounded-xl border border-slate-700 bg-slate-800 p-3 text-slate-300"
+          disabled={loading}
+          className="block w-full cursor-pointer rounded-xl border border-slate-700 bg-slate-800 p-3 text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <p className="mt-2 text-sm text-slate-500">
-          Supported formats: JPG, JPEG, PNG, WEBP ·
-          Maximum size: 10 MB
+          Supported formats: JPG, JPEG, PNG, WEBP · Maximum
+          size: 10 MB
         </p>
 
         {/* Selected File */}
+
         {file && (
           <div className="mt-4 rounded-xl bg-slate-800 p-4">
             <p className="text-sm text-slate-400">
@@ -208,9 +345,8 @@ export default function ImageAnalysisPage() {
           </div>
         )}
 
-        {/* =========================
-            Image Preview
-        ========================= */}
+        {/* Image Preview */}
+
         {preview && (
           <div className="mt-6">
             <p className="mb-3 text-sm text-slate-400">
@@ -227,9 +363,8 @@ export default function ImageAnalysisPage() {
           </div>
         )}
 
-        {/* =========================
-            Buttons
-        ========================= */}
+        {/* Buttons */}
+
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
@@ -246,15 +381,14 @@ export default function ImageAnalysisPage() {
             type="button"
             onClick={handleClear}
             disabled={loading}
-            className="rounded-xl border border-slate-700 px-6 py-3 font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-xl border border-slate-700 px-6 py-3 font-semibold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Clear
           </button>
         </div>
 
-        {/* =========================
-            Error
-        ========================= */}
+        {/* Error */}
+
         {error && (
           <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
             <p className="font-medium text-red-400">
@@ -264,16 +398,26 @@ export default function ImageAnalysisPage() {
         )}
       </div>
 
-      {/* =========================
-          Analysis Result
-      ========================= */}
+      {/* ========================================================
+          RESULT
+      ======================================================== */}
+
       {result && (
         <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-xl font-bold text-white">
-            Image Analysis Result
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-white">
+              Image Analysis Result
+            </h2>
 
-          {/* Filename */}
+            {result.id && (
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-400">
+                Analysis ID: #{result.id}
+              </span>
+            )}
+          </div>
+
+          {/* File */}
+
           <div className="mt-4 rounded-xl bg-slate-800 p-4">
             <p className="text-sm text-slate-400">
               File
@@ -282,13 +426,36 @@ export default function ImageAnalysisPage() {
             <p className="mt-1 break-all text-slate-200">
               {result.filename}
             </p>
+
+            {result.source && (
+              <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                Source: {result.source}
+              </p>
+            )}
           </div>
 
-          {/* =========================
-              Prediction + Confidence
-          ========================= */}
+          {/* Status */}
+
+          <div
+            className={
+              "mt-5 rounded-xl border p-4 " +
+              getStatusStyle()
+            }
+          >
+            <p className="font-semibold">
+              {result.prediction}
+            </p>
+
+            <p className="mt-1 text-sm opacity-80">
+              {getPredictionMessage()}
+            </p>
+          </div>
+
+          {/* Prediction + Confidence */}
+
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {/* Prediction */}
+
             <div className="rounded-xl bg-slate-800 p-5">
               <p className="text-sm text-slate-400">
                 Prediction
@@ -297,68 +464,60 @@ export default function ImageAnalysisPage() {
               <p
                 className={
                   "mt-2 text-3xl font-bold " +
-                  (isToxic
-                    ? "text-red-400"
-                    : "text-green-400")
+                  getPredictionColor()
                 }
               >
                 {result.prediction}
               </p>
 
               <p className="mt-2 text-sm text-slate-400">
-                {isToxic
-                  ? "Potentially harmful or toxic content detected."
-                  : result.prediction.toLowerCase() ===
-                    "safe"
-                  ? "No significant toxicity detected."
-                  : "No readable text was detected in the image."}
+                GuardianAI image classification result.
               </p>
             </div>
 
             {/* Confidence */}
+
             <div className="rounded-xl bg-slate-800 p-5">
               <p className="text-sm text-slate-400">
                 Confidence
               </p>
 
               <p className="mt-2 text-3xl font-bold text-white">
-                {result.confidence}%
+                {confidence.toFixed(2)}%
               </p>
 
               <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-700">
                 <div
                   className={
                     "h-full rounded-full transition-all " +
-                    (isToxic
-                      ? "bg-red-500"
-                      : "bg-green-500")
+                    getProgressColor()
                   }
                   style={{
-                    width:
-                      Math.min(
-                        Math.max(
-                          result.confidence,
-                          0
-                        ),
-                        100
-                      ) + "%",
+                    width: `${confidence}%`,
                   }}
                 />
               </div>
             </div>
           </div>
 
-          {/* =========================
-              OCR Extracted Text
-          ========================= */}
+          {/* OCR TEXT */}
+
           <div className="mt-5 rounded-xl bg-slate-800 p-5">
-            <p className="text-sm text-slate-400">
-              Extracted Text (OCR)
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-slate-400">
+                Extracted Text (OCR)
+              </p>
+
+              {result.extracted_text && (
+                <span className="text-xs text-slate-500">
+                  {result.extracted_text.length} characters
+                </span>
+              )}
+            </div>
 
             <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-4">
               {result.extracted_text ? (
-                <p className="whitespace-pre-wrap text-slate-200">
+                <p className="whitespace-pre-wrap break-words text-slate-200">
                   {result.extracted_text}
                 </p>
               ) : (
@@ -369,8 +528,28 @@ export default function ImageAnalysisPage() {
               )}
             </div>
           </div>
+
+          {/* Analyzed Image */}
+
+          {preview && (
+            <div className="mt-5 rounded-xl bg-slate-800 p-5">
+              <p className="text-sm text-slate-400">
+                Analyzed Image
+              </p>
+
+              <div className="mt-3 flex justify-center rounded-lg border border-slate-700 bg-slate-900 p-4">
+                <img
+                  src={preview}
+                  alt="Analyzed"
+                  className="max-h-80 max-w-full rounded-lg object-contain"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </DashboardLayout>
   );
 }
+
+export default ImageAnalysisPage;

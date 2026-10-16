@@ -54,6 +54,8 @@ export default function ChatWindow({
   // Load messages when chat changes
   // ---------------------------------------
   useEffect(() => {
+    let cancelled = false;
+
     const loadMessages = async () => {
       if (!chatId) {
         setMessages([]);
@@ -65,20 +67,30 @@ export default function ChatWindow({
 
         const data = await getChatMessages(chatId);
 
-        setMessages(data);
+        if (!cancelled) {
+          setMessages(data);
+        }
       } catch (error: any) {
         console.error(
           "Failed to load chat messages:",
           error?.response?.data || error
         );
 
-        setMessages([]);
+        if (!cancelled) {
+          setMessages([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadMessages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [chatId]);
 
   // ---------------------------------------
@@ -101,7 +113,7 @@ export default function ChatWindow({
 
     const cleanText = text.trim();
 
-    if (!cleanText) {
+    if (!cleanText || typing) {
       return;
     }
 
@@ -135,41 +147,42 @@ export default function ChatWindow({
       console.log("Chat API response:", response);
 
       // ---------------------------------------
-      // Transfer ai_response into AI message
+      // Create final AI message
       // ---------------------------------------
       const aiMessage: ChatMessage = {
         ...response.ai_message,
         prediction: response.prediction,
         confidence: response.confidence,
         risk_level: response.ai_response?.risk_level,
-        safer_response: response.ai_response?.safer_response,
+        safer_response:
+          response.ai_response?.safer_response,
       };
 
       // ---------------------------------------
-      // Replace temporary message
-      // with real structured messages
+      // Replace temporary message with
+      // real backend messages
       // ---------------------------------------
       setMessages((prev) => {
         const withoutTemporary = prev.filter(
           (message) => message.id !== temporaryId
         );
-      
-        const aiMessage: ChatMessage = {
-          ...response.ai_message,
-          prediction: response.prediction,
-          confidence: response.confidence,
-          risk_level: response.ai_response?.risk_level,
-          safer_response: response.ai_response?.safer_response,
-        };
-      
+
         return [
           ...withoutTemporary,
           response.user_message,
           aiMessage,
         ];
       });
-      // Refresh chat history
-      onMessageSent?.();
+
+      // ---------------------------------------
+      // Refresh chat/sidebar in background
+      // Do NOT make the user wait for it.
+      // ---------------------------------------
+      if (onMessageSent) {
+        setTimeout(() => {
+          onMessageSent();
+        }, 0);
+      }
 
     } catch (error: any) {
       console.error(
@@ -294,7 +307,7 @@ export default function ChatWindow({
           {/* Typing indicator */}
           {typing && (
             <div className="italic text-slate-400">
-              🤖 GuardianAI is analyzing...
+              GuardianAI is analyzing...
             </div>
           )}
 
@@ -305,10 +318,12 @@ export default function ChatWindow({
 
       {/* Message Input */}
       <div className="shrink-0 border-t border-slate-800">
+
         <MessageInput
           onSend={sendMessage}
           disabled={typing}
         />
+
       </div>
 
     </div>
