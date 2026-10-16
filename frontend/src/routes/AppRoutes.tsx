@@ -12,7 +12,7 @@ import AIChatPage from "../pages/AIChat/AIChatPage";
 import TextAnalysisPage from "../pages/TextAnalysis/TextAnalysisPage";
 import ImageAnalysisPage from "../pages/ImageAnalysis/ImageAnalysisPage";
 import ReportsPage from "../pages/Reports/ReportsPage";
-
+import SettingsPage from "../pages/Settings/SettingsPage";
 import ProtectedRoute from "./ProtectedRoute";
 
 export default function AppRoutes() {
@@ -69,6 +69,11 @@ export default function AppRoutes() {
           <Route
             path="/reports"
             element={<ReportsPage />}
+          />
+
+          <Route
+            path="/settings"
+            element={<SettingsPage />}
           />
 
         </Route>

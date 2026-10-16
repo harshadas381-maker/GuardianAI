@@ -4,11 +4,13 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
+  Legend,
 } from "recharts";
 
 interface DetectionPieChartProps {
   toxic: number;
   safe: number;
+  cyberbullying: number;
 }
 
 interface DetectionData {
@@ -19,14 +21,20 @@ interface DetectionData {
 export default function DetectionPieChart({
   toxic,
   safe,
+  cyberbullying,
 }: DetectionPieChartProps) {
-  const total = toxic + safe;
+  const total = toxic + safe + cyberbullying;
 
   const safePercentage =
     total > 0 ? ((safe / total) * 100).toFixed(1) : "0.0";
 
   const toxicPercentage =
     total > 0 ? ((toxic / total) * 100).toFixed(1) : "0.0";
+
+  const cyberbullyingPercentage =
+    total > 0
+      ? ((cyberbullying / total) * 100).toFixed(1)
+      : "0.0";
 
   const data: DetectionData[] = [
     {
@@ -37,9 +45,17 @@ export default function DetectionPieChart({
       name: "Toxic",
       value: toxic,
     },
-  ];
+    {
+      name: "Cyberbullying",
+      value: cyberbullying,
+    },
+  ].filter((item) => item.value > 0);
 
-  const COLORS = ["#22c55e", "#ef4444"];
+  const COLORS: Record<string, string> = {
+    Safe: "#22c55e",
+    Toxic: "#ef4444",
+    Cyberbullying: "#a855f7",
+  };
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -50,7 +66,7 @@ export default function DetectionPieChart({
         </h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Distribution of safe and toxic content
+          Distribution of Safe, Toxic and Cyberbullying content
         </p>
       </div>
 
@@ -68,7 +84,7 @@ export default function DetectionPieChart({
           </div>
         </div>
       ) : (
-        <div className="mt-4 h-64">
+        <div className="mt-4 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -84,10 +100,10 @@ export default function DetectionPieChart({
                   `${name}: ${value}`
                 }
               >
-                {data.map((_, index) => (
+                {data.map((entry) => (
                   <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index]}
+                    key={entry.name}
+                    fill={COLORS[entry.name]}
                   />
                 ))}
               </Pie>
@@ -98,13 +114,16 @@ export default function DetectionPieChart({
                   name,
                 ]}
               />
+
+              <Legend />
             </PieChart>
           </ResponsiveContainer>
         </div>
       )}
 
       {/* Statistics */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+
         {/* Safe */}
         <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
           <div className="flex items-center gap-2">
@@ -140,6 +159,25 @@ export default function DetectionPieChart({
 
           <p className="text-xs text-slate-500">
             {toxicPercentage}% of analyses
+          </p>
+        </div>
+
+        {/* Cyberbullying */}
+        <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full bg-purple-500" />
+
+            <span className="text-sm font-semibold text-slate-300">
+              Cyberbullying
+            </span>
+          </div>
+
+          <p className="mt-2 text-2xl font-bold text-purple-400">
+            {cyberbullying}
+          </p>
+
+          <p className="text-xs text-slate-500">
+            {cyberbullyingPercentage}% of analyses
           </p>
         </div>
       </div>

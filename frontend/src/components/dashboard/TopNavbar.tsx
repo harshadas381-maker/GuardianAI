@@ -67,9 +67,14 @@ export default function TopNavbar() {
 
         <button
           type="button"
-          className="rounded-xl bg-slate-800 p-3 hover:bg-slate-700"
+          onClick={() => navigate("/settings")}
+          title="Settings"
+          className="rounded-xl bg-slate-800 p-3 transition hover:bg-slate-700"
         >
-          <Settings size={20} className="text-white" />
+          <Settings
+            size={20}
+            className="text-white"
+          />
         </button>
 
         {/* USER */}

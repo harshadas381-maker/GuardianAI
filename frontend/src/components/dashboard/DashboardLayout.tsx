@@ -7,22 +7,24 @@ interface Props {
 
 export default function DashboardLayout({ children }: Props) {
   return (
-    <div className="min-h-screen flex bg-slate-950">
+    <div className="flex min-h-screen bg-slate-950 text-white">
 
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      {/* Main Area */}
+      <div className="flex min-w-0 flex-1 flex-col">
 
         {/* Top Navbar */}
-        <div className="relative z-40 p-6 border-b border-slate-800">
+        <header className="relative z-40 shrink-0 border-b border-slate-800 bg-slate-950 p-6">
           <TopNavbar />
-        </div>
+        </header>
 
         {/* Page Content */}
-        <main className="min-h-0 flex-1 overflow-hidden p-8">
-          {children}
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8">
+          <div className="mx-auto w-full max-w-[1800px]">
+            {children}
+          </div>
         </main>
 
       </div>

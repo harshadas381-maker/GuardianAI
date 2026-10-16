@@ -54,4 +54,10 @@ def analyze_text(
         "id": analysis.id,
         "prediction": result["prediction"],
         "confidence": result["confidence"],
+        "risk_level": result.get("risk_level", "unknown"),
+        "is_harmful": result.get("is_harmful"),
+        "harm_type": result.get("harm_type"),
+        "class_scores": result.get("class_scores", {}),
+        "language": result.get("language", "Unknown"),
+        "processed_text": result.get("processed_text", text),
     }
