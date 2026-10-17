@@ -1,3 +1,4 @@
+
 from dotenv import load_dotenv
 import os
 
@@ -5,15 +6,15 @@ load_dotenv()
 
 APP_NAME = os.getenv("APP_NAME", "GuardianAI")
 APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
-DEBUG = os.getenv("DEBUG", "True")
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-HOST = os.getenv("HOST", "127.0.0.1")
-PORT = int(os.getenv("PORT", 8000))
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8000"))
 
 SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 )
 
 DATABASE_HOST = os.getenv("DATABASE_HOST", "localhost")
@@ -22,7 +23,17 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "guardian_ai")
 DATABASE_USER = os.getenv("DATABASE_USER", "postgres")
 DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
 
-DATABASE_URL = (
-    f"postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}"
-    f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
-)
+# Prefer a hosted database URL when provided by Render or another host.
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Some hosts provide the legacy postgres:// scheme.
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace(
+            "postgres://", "postgresql://", 1
+        )
+else:
+    DATABASE_URL = (
+        f"postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}"
+        f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
+    )

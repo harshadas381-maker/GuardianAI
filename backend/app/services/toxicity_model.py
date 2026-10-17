@@ -1,4 +1,3 @@
-
 import os
 import re
 import joblib
@@ -15,34 +14,68 @@ from langdetect import detect, DetectorFactory
 DetectorFactory.seed = 0
 
 
+
 # ============================================================
-# GuardianAI V3 Model
+# GuardianAI V3 Model — Local or Private Hugging Face
 # ============================================================
 
-MODEL_PATH = os.path.abspath(
+MODEL_FILENAME = "guardianai_tfidf_char_word_v3_weighted.joblib"
+MODEL_REPO_ID = os.getenv(
+    "HF_MODEL_REPO",
+    "harshada14/guardianai-model"
+)
+
+LOCAL_MODEL_PATH = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
         "..",
         "..",
         "models",
-        "guardianai_tfidf_char_word_v3_weighted.joblib",
+        MODEL_FILENAME,
     )
 )
+
+# Allow an optional custom model path for deployment.
+MODEL_PATH = os.getenv("GUARDIANAI_MODEL_PATH", LOCAL_MODEL_PATH)
 
 print("=" * 60)
 print("Loading GuardianAI V3 model...")
 print("=" * 60)
-print("Model path:", MODEL_PATH)
 
 try:
+    if os.path.isfile(MODEL_PATH):
+        # Use the existing local model when available.
+        print("Loading local model:", MODEL_PATH)
+    else:
+        # Download the model from the private Hugging Face repository.
+        from huggingface_hub import hf_hub_download
+
+        hf_token = os.getenv("HF_TOKEN")
+        if not hf_token:
+            raise RuntimeError(
+                "Model file not found locally and HF_TOKEN is not configured."
+            )
+
+        print("Downloading model from private Hugging Face repository...")
+
+        MODEL_PATH = hf_hub_download(
+            repo_id=MODEL_REPO_ID,
+            filename=MODEL_FILENAME,
+            token=hf_token,
+            repo_type="model",
+        )
+
+        print("Model downloaded successfully.")
+
     model = joblib.load(MODEL_PATH)
+
     print("GuardianAI V3 model loaded successfully.")
     print("Model type:", type(model).__name__)
+
 except Exception as e:
     print("ERROR loading GuardianAI V3 model:")
     print(repr(e))
     model = None
-
 
 # ============================================================
 # Labels
