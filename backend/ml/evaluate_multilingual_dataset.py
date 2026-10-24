@@ -124,7 +124,7 @@ def main() -> int:
             rows.append({
                 "language_split": split,
                 "language_name": language_name,
-                "dataset_row": str(record.get("text", ""))[:0] + str(row_number),
+                "dataset_row": str(row_number),
                 "gold_toxic": gold,
                 "predicted_harmful": prediction,
                 "status": status,
