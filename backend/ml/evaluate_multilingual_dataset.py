@@ -109,17 +109,24 @@ def main() -> int:
             prediction = None
             status = "ok"
             error = ""
+            # Keep translation and model failures separate. Otherwise a broken
+            # classifier can be misreported as a translation-provider problem.
             try:
                 translated = translator.translate(original) or ""
+            except Exception as exc:
+                status = "translation_failed"
+                error = f"{type(exc).__name__}: {str(exc)[:250]}"
+            else:
                 if not translated.strip():
                     status = "translation_failed"
                     error = "Translator returned empty text"
                 else:
-                    predicted_label = model.predict([translated.strip()])[0]
-                    prediction = to_binary_prediction(predicted_label)
-            except Exception as exc:  # report individual failures; keep benchmark running
-                status = "translation_or_inference_failed"
-                error = f"{type(exc).__name__}: {str(exc)[:250]}"
+                    try:
+                        predicted_label = model.predict([translated.strip()])[0]
+                        prediction = to_binary_prediction(predicted_label)
+                    except Exception as exc:
+                        status = "inference_failed"
+                        error = f"{type(exc).__name__}: {str(exc)[:250]}"
 
             rows.append({
                 "language_split": split,
@@ -139,9 +146,13 @@ def main() -> int:
             [r for r in rows if r["language_split"] == split]
         )
         scored = current[current["status"] == "ok"]
+        failure_counts = current.loc[
+            current["status"] != "ok", "status"
+        ].value_counts().to_dict()
         print(
             f"{split}: attempted={len(current)}, scored={len(scored)}, "
-            f"failed={len(current) - len(scored)}"
+            f"failed={len(current) - len(scored)}, "
+            f"failure_breakdown={failure_counts}"
         )
         if not scored.empty:
             y_true = scored["gold_toxic"].astype(int)
