@@ -116,6 +116,29 @@ LANGUAGE_NAMES = {
     "ml": "Malayalam",
     "pa": "Punjabi",
     "ur": "Urdu",
+    # Common Latin-script languages. Unknown detector codes must never
+    # silently default to English, because that skips translation.
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "nl": "Dutch",
+    "id": "Indonesian",
+    "tr": "Turkish",
+    "vi": "Vietnamese",
+    "sw": "Swahili",
+    "ru": "Russian",
+    "pl": "Polish",
+    "ro": "Romanian",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "fi": "Finnish",
+    "cs": "Czech",
+    "el": "Greek",
+    "he": "Hebrew",
+    "ar": "Arabic",
 }
 
 
@@ -271,6 +294,33 @@ HINGLISH_WORDS = {
 }
 
 
+ROMAN_MARATHI_WORDS = {
+    "ahe", "aahe", "aahes", "ahet", "mala", "maza", "majha",
+    "mazi", "majhi", "maze", "majhe", "tula", "tumhala",
+    "tumhi", "aapan", "khup", "nako", "kuthe", "ithe", "tithe",
+    "kaay", "kay", "kasa", "kashi", "kase", "zala", "zhala",
+    "zali", "zale", "hota", "hoti", "hote", "karto", "karte",
+    "kartoy", "jaato", "jaate", "yeto", "yete",
+}
+
+
+def is_roman_marathi(text: str) -> bool:
+    """Detect common Marathi words transliterated into Latin script."""
+
+    words = set(re.findall(r"[a-zA-Z]+", text.lower()))
+    if not words:
+        return False
+
+    matches = words.intersection(ROMAN_MARATHI_WORDS)
+    # Require two cues to reduce false positives from shared words
+    # such as "kay" and "nahi" in other Indic languages.
+    return len(matches) >= 2 or (
+        len(matches) >= 1 and bool(words.intersection(
+            {"mala", "tula", "tumhala", "ahe", "aahe", "khup", "nako"}
+        )) and len(words) >= 4
+    )
+
+
 def is_hinglish(text: str) -> bool:
     """Detect common Hindi words written in Roman script."""
 
@@ -305,12 +355,20 @@ def detect_language(text: str) -> str:
     # --------------------------------------------------------
 
     if script == "Latin":
+        # Check Marathi before Hindi because both may be code-mixed with
+        # English and langdetect often labels short Romanized text as English.
+        if is_roman_marathi(text):
+            return "Marathi"
+
         if is_hinglish(text):
             return "Hinglish"
 
         try:
             detected = detect(text)
-            return LANGUAGE_NAMES.get(detected, "English")
+            # Critical: an unsupported/ambiguous language is not English.
+            # Returning Unknown routes it through translation and, if that
+            # fails, the existing Needs Review safety path.
+            return LANGUAGE_NAMES.get(detected, "Unknown")
         except Exception as e:
             print("Language detection warning:", repr(e))
             return "Unknown"
