@@ -26,6 +26,33 @@ class MultilingualDetectionRegressionTests(unittest.TestCase):
                 "Unknown",
             )
 
+    def test_devanagari_marathi_is_detected(self):
+        self.assertEqual(
+            toxicity_model.detect_language("तू मूर्ख आहेस"),
+            "Marathi",
+        )
+
+    def test_devanagari_hindi_is_detected(self):
+        self.assertEqual(
+            toxicity_model.detect_language("तुम बेवकूफ हो"),
+            "Hindi",
+        )
+
+    def test_translation_failure_stops_before_model_classification(self):
+        with (
+            patch.object(
+                toxicity_model,
+                "translate_to_english",
+                return_value=("तू मूर्ख आहेस", "Marathi", False),
+            ),
+            patch.object(toxicity_model, "model") as model,
+        ):
+            result = toxicity_model.analyze_toxicity("तू मूर्ख आहेस")
+
+        self.assertEqual(result["prediction"], "Needs Review")
+        self.assertTrue(result["translation_failed"])
+        model.predict.assert_not_called()
+
     def test_unknown_language_still_goes_through_translation(self):
         with (
             patch.object(toxicity_model, "detect_language", return_value="Unknown"),
