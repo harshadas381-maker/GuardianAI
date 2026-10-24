@@ -6,13 +6,13 @@ on:
       - "backend/app/services/toxicity_model.py"
       - "backend/tests/test_multilingual_detection.py"
       - "backend/ml/evaluate_multilingual_dataset.py"
-      - "backend/ml/evaluate_multilingual_dataset.py"
       - ".github/workflows/multilingual-regression.yml"
   push:
     branches: ["**"]
     paths:
       - "backend/app/services/toxicity_model.py"
       - "backend/tests/test_multilingual_detection.py"
+      - "backend/ml/evaluate_multilingual_dataset.py"
       - ".github/workflows/multilingual-regression.yml"
 
 jobs:
