@@ -282,6 +282,36 @@ def is_hinglish(text: str) -> bool:
     matches = sum(word in HINGLISH_WORDS for word in words)
     return matches >= 2
 
+# Common Marathi words written in Roman script (Marathi transliteration).
+# This is deliberately conservative: two matches or one high-signal word
+# are required to reduce false positives on ordinary English text.
+ROMAN_MARATHI_WORDS = {
+    "ahe", "aahe", "ahes", "ahet", "mi", "mala", "majha", "majhi",
+    "majhe", "mala", "tula", "tumhi", "tumhala", "aapan", "kay",
+    "kaay", "kasa", "kashi", "kuthe", "ithe", "tithe", "nahi",
+    "nako", "khup", "pan", "mhanje", "ka", "kadhi", "kiti",
+    "karto", "karte", "kartoy", "kartay", "zala", "zhala", "jhala",
+    "hotay", "hote", "hoti", "ho", "nigh", "sang", "bol", "changla",
+    "changli", "changale", "vait", "vedha", "vedi", "murkha",
+}
+ROMAN_MARATHI_STRONG_WORDS = {
+    "ahe", "aahe", "ahes", "ahet", "mala", "tula", "majha", "majhi",
+    "majhe", "kuthe", "khup", "nako", "mhanje", "tumhala", "aapan",
+}
+
+
+def is_roman_marathi(text: str) -> bool:
+    """Detect common Marathi transliteration written in Latin characters."""
+
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+    if not words:
+        return False
+
+    matches = sum(word in ROMAN_MARATHI_WORDS for word in words)
+    return matches >= 2 or any(
+        word in ROMAN_MARATHI_STRONG_WORDS for word in words
+    )
+
 
 # ============================================================
 # Language Detection
@@ -305,12 +335,17 @@ def detect_language(text: str) -> str:
     # --------------------------------------------------------
 
     if script == "Latin":
+        # Check Marathi transliteration before Hinglish because several
+        # short Roman-script words overlap across the two languages.
+        if is_roman_marathi(text):
+            return "Marathi"
+
         if is_hinglish(text):
             return "Hinglish"
 
         try:
             detected = detect(text)
-            return LANGUAGE_NAMES.get(detected, "English")
+            return LANGUAGE_NAMES.get(detected, "Unknown")
         except Exception as e:
             print("Language detection warning:", repr(e))
             return "Unknown"
