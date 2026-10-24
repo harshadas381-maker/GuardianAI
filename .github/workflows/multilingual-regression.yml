@@ -7,7 +7,7 @@ on:
       - "backend/tests/test_multilingual_detection.py"
       - ".github/workflows/multilingual-regression.yml"
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - "backend/app/services/toxicity_model.py"
       - "backend/tests/test_multilingual_detection.py"
