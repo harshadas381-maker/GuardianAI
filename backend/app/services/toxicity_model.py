@@ -299,8 +299,8 @@ ROMAN_MARATHI_WORDS = {
     "mazi", "majhi", "maze", "majhe", "tula", "tumhala",
     "tumhi", "aapan", "khup", "nako", "kuthe", "ithe", "tithe",
     "kaay", "kay", "kasa", "kashi", "kase", "zala", "zhala",
-    "zali", "zale", "hota", "hoti", "hote", "karतो", "karte",
-    "kartoy", "karतोय", "jaato", "jaate", "yeto", "yete",
+    "zali", "zale", "hota", "hoti", "hote", "karto", "karte",
+    "kartoy", "jaato", "jaate", "yeto", "yete",
 }
 
 
