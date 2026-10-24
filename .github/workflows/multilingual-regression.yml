@@ -5,6 +5,8 @@ on:
     paths:
       - "backend/app/services/toxicity_model.py"
       - "backend/tests/test_multilingual_detection.py"
+      - "backend/ml/evaluate_multilingual_dataset.py"
+      - "backend/ml/evaluate_multilingual_dataset.py"
       - ".github/workflows/multilingual-regression.yml"
   push:
     branches: ["**"]
@@ -23,6 +25,8 @@ jobs:
           python-version: "3.11"
       - name: Install test dependencies
         run: python -m pip install numpy joblib deep-translator langdetect huggingface_hub
+      - name: Compile multilingual benchmark script
+        run: python -m py_compile backend/ml/evaluate_multilingual_dataset.py
       - name: Run multilingual regression tests
         working-directory: backend
         run: python -m unittest discover -s tests -v
