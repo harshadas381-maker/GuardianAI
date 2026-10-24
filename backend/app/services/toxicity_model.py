@@ -310,7 +310,7 @@ def detect_language(text: str) -> str:
 
         try:
             detected = detect(text)
-            return LANGUAGE_NAMES.get(detected, "English")
+            return LANGUAGE_NAMES.get(detected, "Unknown")
         except Exception as e:
             print("Language detection warning:", repr(e))
             return "Unknown"
