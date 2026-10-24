@@ -11,6 +11,12 @@ class MultilingualRoutingTests(unittest.TestCase):
             "Marathi",
         )
 
+    def test_common_romanized_marathi_insult_is_not_misidentified_as_english(self):
+        self.assertEqual(
+            toxicity_model.detect_language("tu kamjor ahes"),
+            "Marathi",
+        )
+
     def test_romanized_hindi_is_detected_as_hinglish(self):
         self.assertEqual(
             toxicity_model.detect_language("Tum mujhe bahut pasand ho"),
