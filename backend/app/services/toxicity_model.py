@@ -295,7 +295,7 @@ HINGLISH_WORDS = {
 
 
 ROMAN_MARATHI_WORDS = {
-    "ahe", "aahe", "aahes", "ahet", "mala", "maza", "majha",
+    "ahe", "aahe", "aahes", "ahes", "ahet", "mala", "maza", "majha",
     "mazi", "majhi", "maze", "majhe", "tula", "tumhala",
     "tumhi", "aapan", "khup", "nako", "kuthe", "ithe", "tithe",
     "kaay", "kay", "kasa", "kashi", "kase", "zala", "zhala",
@@ -314,9 +314,15 @@ def is_roman_marathi(text: str) -> bool:
     matches = words.intersection(ROMAN_MARATHI_WORDS)
     # Require two cues to reduce false positives from shared words
     # such as "kay" and "nahi" in other Indic languages.
+    # "tu kamjor ahes" is a common Romanized Marathi sentence; "ahes"
+    # is a strong Marathi cue even when the rest of the sentence has no
+    # other vocabulary from the list. Require a pronoun and at least 3 words.
+    if "ahes" in words and "tu" in words and len(words) >= 3:
+        return True
+
     return len(matches) >= 2 or (
         len(matches) >= 1 and bool(words.intersection(
-            {"mala", "tula", "tumhala", "ahe", "aahe", "khup", "nako"}
+            {"mala", "tula", "tumhala", "ahe", "aahe", "aahes", "ahes", "khup", "nako"}
         )) and len(words) >= 4
     )
 
